@@ -228,7 +228,7 @@ export class GridComponent implements OnInit {
     },
 
     getRowId(params) {
-      return params.data.name;
+      return astreKey(params.data);
     },
     onCellValueChanged(event) {
       let data = event.data;
