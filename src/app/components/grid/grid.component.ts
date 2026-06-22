@@ -235,7 +235,7 @@ export class GridComponent implements OnInit {
       // Can't update when the rowID is being changed
       if (event.column.getColId() != "name") {
         if (event.column.getColId() != "was_modified") {
-          let rowNode = event.api.getRowNode(data.name)!;
+          let rowNode = event.api.getRowNode(astreKey(data))!;
           if (rowNode) {
             rowNode.setDataValue("was_modified", true);
           }
