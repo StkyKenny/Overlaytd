@@ -29,6 +29,7 @@ export const treeConfig = {
     defaultOpacity: 0.5,
     hoverOpacity: 1,
     defaultWeight: 300,
+    hightlightedWeight: 900,
     hoverWeight: 700,
   },
 };

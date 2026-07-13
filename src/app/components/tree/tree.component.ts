@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, ElementRef, ViewChild, SimpleChanges, inject } from "@angular/core";
+import { Component, AfterViewInit, ElementRef, ViewChild, SimpleChanges, inject, HostListener } from "@angular/core";
 import * as d3 from "d3";
 import { ToastrService } from "ngx-toastr";
 import { Astre, AstreID, astreIDKey, updateTags } from "src/app/models/Astre";
@@ -16,8 +16,10 @@ import * as Tone from "tone";
 import { StringInputDialogComponent } from "src/app/shared/string-input-dialog.component";
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { take } from "rxjs";
+import { SharedModule } from "src/app/shared.module";
 @Component({
   selector: "app-tree",
+  imports: [SharedModule], //CommonModule required for ngFor
   template: `
     <div class="tree-wrapper">
       <svg #svgContainer style="width:90vw; height:87vh;"></svg>
@@ -26,15 +28,24 @@ import { take } from "rxjs";
       <input class="form-check-input" type="checkbox" role="switch" id="SwitchTextMirror" checked />
       <label class="form-check-label" for="SwitchTextMirror">Mirror text</label>
     </div>
-    <input
-      type="range"
-      style='transform", event.transform +  rotate(90)'
-      id="slider"
-      min="-190"
-      max="190"
-      step="1"
-      value="0"
-    />
+    <p>
+      <input
+        type="range"
+        style='transform", event.transform +  rotate(90)'
+        id="slider"
+        min="-190"
+        max="190"
+        step="1"
+        value="0"
+      />
+      <input
+        type="text"
+        id="quickSearch"
+        [(ngModel)]="quickSearchValue"
+        placeholder="Quick search..."
+        (ngModelChange)="onSearchChange()"
+      />
+    </p>
   `,
   styleUrl: "./tree.component.css",
 })
@@ -47,6 +58,7 @@ export class TreeComponent implements AfterViewInit {
 
   childColumn = "";
   parentColumn = "";
+  quickSearchValue: string = "";
 
   // Tooltip variables
   svgBounds: any;
@@ -71,6 +83,30 @@ export class TreeComponent implements AfterViewInit {
   lastRotationTick: number = 0;
 
   treeNodeText: any;
+  root: d3.HierarchyNode<Astre>;
+  nodeG: d3.Selection<SVGGElement | d3.BaseType, d3.HierarchyPointNode<Astre>, SVGGElement, unknown>;
+
+  @HostListener("document:keydown", ["$event"])
+  onKeyDown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement;
+
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") {
+      return;
+    }
+
+    if (event.key === "Backspace") {
+      this.quickSearchValue = this.quickSearchValue.slice(0, -1);
+      this.onSearchChange();
+      return;
+    }
+
+    if (event.key.length !== 1) {
+      return;
+    }
+
+    this.quickSearchValue += event.key;
+    this.onSearchChange();
+  }
 
   constructor(
     private toastr: ToastrService,
@@ -121,7 +157,7 @@ export class TreeComponent implements AfterViewInit {
         },
       });
     const slider = document.getElementById("slider");
-    slider!.addEventListener(
+    /*slider!.addEventListener(
       "input",
       //let sliderElement: HTMLInputElement = e.target as HTMLInputElement;
       async () => {
@@ -146,7 +182,7 @@ export class TreeComponent implements AfterViewInit {
     );
     slider!.addEventListener("mouseup", (e: Event) => {
       this.pitchShift.pitch = this.startingPitch;
-    });
+    });*/
 
     const SwitchTextMirror = document.getElementById("SwitchTextMirror") as HTMLInputElement;
     SwitchTextMirror!.addEventListener("input", (e: Event) => {
@@ -239,6 +275,36 @@ export class TreeComponent implements AfterViewInit {
     this.clearTooltip();
   }
 
+  onSearchChange() {
+    this.nodeG.select(".search-highlight").attr("opacity", (d) => (this.quickSearchFilter(d.data) ? 1 : 0));
+
+    this.nodeG
+      .select(".search-text-highlight")
+      .attr("fill", (d) => (this.quickSearchFilter(d.data) ? "rgb(255, 0, 0)" : "rgb(0, 0, 0)"))
+
+      .attr("font-weight", (d) =>
+        this.quickSearchFilter(d.data) ? treeConfig.label.hightlightedWeight : treeConfig.label.defaultWeight,
+      )
+      .attr("opacity", (d) =>
+        this.quickSearchFilter(d.data) ? treeConfig.label.hoverOpacity : treeConfig.label.defaultOpacity,
+      );
+  }
+
+  quickSearchFilter(astre: Astre): boolean {
+    let searchValue: string = this.quickSearchValue.trim().toLowerCase();
+    if ("" == searchValue) {
+      return false;
+    }
+
+    if (astre.astreID.name.toLowerCase().includes(searchValue)) {
+      return true;
+    }
+    if (astre.tags.toLowerCase().includes(searchValue)) {
+      return true;
+    }
+    return false;
+  }
+
   //  TODO add feature for this button
   blankButton(event: PointerEvent) {
     //
@@ -310,6 +376,17 @@ export class TreeComponent implements AfterViewInit {
           }
         }
       }
+    }
+
+    if (astre.link == null || astre.link == "" || astre.link == " ") {
+    } else {
+      console.log(astre.astreID.name);
+      console.log(astre.link);
+      console.log(typeof astre.link);
+      additionalComments +=
+        '<iframe height="240" width="480" [src]="\"' +
+        astre.link +
+        '\"" loading="lazy"                  frameborder="1"                  allowfullscreen                  allow="autoplay"                ></iframe>';
     }
 
     // ==================
@@ -492,9 +569,8 @@ export class TreeComponent implements AfterViewInit {
     }
 
     // === Create Tree ===
-    let root: d3.HierarchyNode<Astre>;
 
-    root = d3
+    this.root = d3
       .stratify<Astre>()
       .id((d: Astre) => d.astreID.name)
       .parentId((d: Astre) => d.parent)(astres);
@@ -506,7 +582,7 @@ export class TreeComponent implements AfterViewInit {
       .tree<Astre>()
       .size([2 * Math.PI, radius])
       .separation((a, b) => (a.parent === b.parent ? 1 : 1.5) / Math.min(a.depth, b.depth + 1));
-    const rootPoint = tree(root as d3.HierarchyNode<Astre>);
+    const rootPoint = tree(this.root as d3.HierarchyNode<Astre>);
 
     // === Select SVG and zoom  ===
     const svg: d3.Selection<SVGSVGElement, unknown, null, undefined> = d3.select(this.svgRef.nativeElement);
@@ -559,7 +635,7 @@ export class TreeComponent implements AfterViewInit {
       })
       .attr("stroke-width", linkConfig.stroke.width);
     // Draw nodes
-    const nodeG = g
+    this.nodeG = g
       .append("g")
       .selectAll("g.node")
       .data(rootPoint.descendants())
@@ -570,15 +646,11 @@ export class TreeComponent implements AfterViewInit {
         return `translate(${x},${y})`;
       });
 
-    nodeG
-      //.filter((a) => a.data.tags != null)
-      //.filter((a) => a.data.tags.includes("public") == true) // For Quick preview
-      .append("circle")
-      .attr("r", 15)
-      .attr("opacity", 0); // Fake increased hitbox
-    nodeG.append("circle").attr("r", 3).attr("opacity", 0.5);
-    this.treeNodeText = nodeG
+    this.nodeG.append("circle").attr("r", 15).attr("opacity", 0); // Fake increased hitbox
+    this.nodeG.append("circle").attr("r", 3).attr("opacity", 0.5);
+    this.treeNodeText = this.nodeG
       .append("text")
+      .attr("class", "search-text-highlight")
       .attr("dy", -10)
       .text((d: d3.HierarchyPointNode<Astre>) => {
         return d.id ?? null;
@@ -588,15 +660,21 @@ export class TreeComponent implements AfterViewInit {
       .attr("transform", (d) => `rotate(${(d.x * 180) / Math.PI - 90})`) // Taken from https://observablehq.com/@d3/radial-tree/2.attr
       .attr("fill", "#000000ff");
 
+    this.nodeG
+      .append("circle")
+      .attr("class", "search-highlight")
+      .attr("r", 10)
+      .attr("fill", "#FF0000")
+      .attr("opacity", (d) => (this.quickSearchFilter(d.data) ? 1 : 0));
     // Node Events
-    nodeG
+    this.nodeG
       .on("click", (event: MouseEvent, pointNode: d3.HierarchyPointNode<Astre>) => {
         let target = event.currentTarget as SVGElement;
 
         this.tooltipCloseButton.style("display", "block");
         this.tooltipTagSpreadButton.style("display", "block");
         this.tooltipTagRemovalSpreadButton.style("display", "block");
-        const anchor = nodeG
+        const anchor = this.nodeG
           .select("circle")
           .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
           .data()[0];
@@ -643,7 +721,7 @@ export class TreeComponent implements AfterViewInit {
         this.tooltipWrapper.style("display", "block");
         this.tooltipWrapper.transition().duration(200).style("opacity", 0.9);
         if (!this.tooltipPinned) {
-          this.tooltipAnchor = nodeG
+          this.tooltipAnchor = this.nodeG
             .select("circle")
             .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
             .data()[0];
