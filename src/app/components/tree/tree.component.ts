@@ -17,6 +17,7 @@ import { StringInputDialogComponent } from "src/app/shared/string-input-dialog.c
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { take } from "rxjs";
 import { SharedModule } from "src/app/shared.module";
+
 @Component({
   selector: "app-tree",
   imports: [SharedModule], //CommonModule required for ngFor
@@ -36,7 +37,8 @@ import { SharedModule } from "src/app/shared.module";
         min="-190"
         max="190"
         step="1"
-        value="0"
+        [(ngModel)]="sliderValue"
+        (wheel)="onSliderWheel($event)"
       />
       <input
         type="text"
@@ -74,6 +76,7 @@ export class TreeComponent implements AfterViewInit {
   tooltipPropagateTag: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
 
   // Slider
+  sliderValue: number = 0;
   startingPitch: number = -10;
   maxPitch: number = 20;
   incrementPitch: number = 2;
@@ -305,6 +308,17 @@ export class TreeComponent implements AfterViewInit {
     return false;
   }
 
+  onSliderWheel(event: WheelEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    let incrementValue = 5;
+
+    if (event.deltaY > 0) {
+      this.sliderValue += incrementValue;
+    } else {
+      this.sliderValue -= incrementValue;
+    }
+  }
   //  TODO add feature for this button
   blankButton(event: PointerEvent) {
     //
@@ -612,9 +626,8 @@ export class TreeComponent implements AfterViewInit {
 
     svg.call(zoom.transform, initialTransform);
 
-    d3.select("#slider").on("input", function (e: Event) {
-      let sliderElement: HTMLInputElement = e.target as HTMLInputElement;
-      rotationValue = Number(sliderElement.value);
+    d3.select("#slider").on("wheel", (e: Event) => {
+      rotationValue = Number(this.sliderValue);
       updateViewTransform();
     });
 
