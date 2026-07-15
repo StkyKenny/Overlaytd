@@ -299,10 +299,10 @@ export class TreeComponent implements AfterViewInit {
       return false;
     }
 
-    if (astre.astreID.name.toLowerCase().includes(searchValue)) {
+    if (astre.astreID.name != null && astre.astreID.name.toLowerCase().includes(searchValue)) {
       return true;
     }
-    if (astre.tags.toLowerCase().includes(searchValue)) {
+    if (astre.tags != null && astre.tags.toLowerCase().includes(searchValue)) {
       return true;
     }
     return false;
