@@ -39,7 +39,9 @@ import { SharedModule } from "src/app/shared.module";
         step="1"
         [(ngModel)]="sliderValue"
         (wheel)="onSliderWheel($event)"
+        (input)="onSliderInput($event)"
       />
+
       <input
         type="text"
         id="quickSearch"
@@ -86,6 +88,9 @@ export class TreeComponent implements AfterViewInit {
   lastRotationTick: number = 0;
 
   treeNodeText: any;
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>;
+  g: d3.Selection<SVGGElement, unknown, null, undefined>;
+  currentTransform = "";
   root: d3.HierarchyNode<Astre>;
   nodeG: d3.Selection<SVGGElement | d3.BaseType, d3.HierarchyPointNode<Astre>, SVGGElement, unknown>;
 
@@ -137,6 +142,8 @@ export class TreeComponent implements AfterViewInit {
   }
   ngAfterViewInit(): void {
     const svgElement = this.svgRef.nativeElement as SVGSVGElement;
+    this.svg = d3.select(this.svgRef.nativeElement);
+    this.g = this.svg.append("g");
     // get actual pixel dimensions from browser layout
     this.svgBounds = svgElement.getBoundingClientRect();
     this.astreService
@@ -308,6 +315,10 @@ export class TreeComponent implements AfterViewInit {
     return false;
   }
 
+  updateViewTransform(currentTransform: string) {
+    this.g.attr("transform", currentTransform + " rotate(" + this.sliderValue + " )");
+  }
+
   onSliderWheel(event: WheelEvent) {
     event.preventDefault();
     event.stopPropagation();
@@ -318,6 +329,14 @@ export class TreeComponent implements AfterViewInit {
     } else {
       this.sliderValue -= incrementValue;
     }
+
+    this.updateViewTransform(this.currentTransform);
+  }
+
+  onSliderInput(event: Event) {
+    //this.sliderValue = Number((event.target as HTMLInputElement).value);
+
+    this.updateViewTransform(this.currentTransform);
   }
   //  TODO add feature for this button
   blankButton(event: PointerEvent) {
@@ -599,44 +618,33 @@ export class TreeComponent implements AfterViewInit {
     const rootPoint = tree(this.root as d3.HierarchyNode<Astre>);
 
     // === Select SVG and zoom  ===
-    const svg: d3.Selection<SVGSVGElement, unknown, null, undefined> = d3.select(this.svgRef.nativeElement);
-    const g: d3.Selection<SVGGElement, unknown, null, undefined> = svg.append("g");
 
     let rotationValue = 0;
     let currentTransform = "";
-
-    function updateViewTransform() {
-      g.attr("transform", currentTransform + " rotate(" + rotationValue + " )");
-    }
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.02, 10])
       .on("zoom", (event) => {
         currentTransform = event.transform;
-        updateViewTransform();
+        this.updateViewTransform(currentTransform);
       });
     // Attach zoom
-    svg.call(zoom);
+    this.svg.call(zoom);
 
     // Apply initial transform to center the content
     const initialTransform = d3.zoomIdentity
       .translate(this.svgBounds.width / 2, this.svgBounds.height / 2) // move to screen center
       .scale(1);
 
-    svg.call(zoom.transform, initialTransform);
-
-    d3.select("#slider").on("wheel", (e: Event) => {
-      rotationValue = Number(this.sliderValue);
-      updateViewTransform();
-    });
+    this.svg.call(zoom.transform, initialTransform);
 
     // === Links  ===
     const linkGen = d3
       .linkRadial<unknown, d3.HierarchyPointNode<Astre>>()
       .angle((d) => d.x)
       .radius((d: d3.HierarchyPointNode<Astre>) => d.y);
-    const links = g
+    const links = this.g
       .selectAll(".link")
       .data(rootPoint.links()) // gives array of {source, target}
       .join("path")
@@ -648,7 +656,7 @@ export class TreeComponent implements AfterViewInit {
       })
       .attr("stroke-width", linkConfig.stroke.width);
     // Draw nodes
-    this.nodeG = g
+    this.nodeG = this.g
       .append("g")
       .selectAll("g.node")
       .data(rootPoint.descendants())
@@ -768,8 +776,12 @@ export class TreeComponent implements AfterViewInit {
           .transition()
           .ease(d3.easeExpOut)
           .attr("opacity", treeConfig.label.defaultOpacity)
-          .attr("fill", "#000000ff")
-          .attr("font-weight", treeConfig.label.defaultWeight);
+          .attr("font-weight", (d: any) =>
+            this.quickSearchFilter(d.data) ? treeConfig.label.hightlightedWeight : treeConfig.label.defaultWeight,
+          )
+          .attr("opacity", (d: any) =>
+            this.quickSearchFilter(d.data) ? treeConfig.label.hoverOpacity : treeConfig.label.defaultOpacity,
+          );
       });
   }
 }

@@ -34,10 +34,10 @@ export const treeConfig = {
   },
 };
 export function rainbowLoop(elem: any, attributeName: string, link: d3.HierarchyPointLink<Astre>) {
-  let saturationVarianceMax = 0.75;
-  let saturationVarianceMin = 0.25;
-  let luminosityVarianceMax = 0.75;
-  let luminosityVarianceMin = 0.25;
+  let saturationVarianceMax = 0.9;
+  let saturationVarianceMin = 0.2;
+  let luminosityVarianceMax = 0.8;
+  let luminosityVarianceMin = 0.2;
 
   let i = 0;
   let step = 20;
