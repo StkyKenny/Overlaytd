@@ -14,11 +14,13 @@ import { PageInfoService } from "./page-info.service";
   selector: "app-root",
   imports: [RouterModule, CommonModule, MediaDockComponent],
   template: `
-    <button id="sidebarhelper" class="sidebarhelper toggle-btn btn btn-light" (click)="toggleSidebar()">></button>
+    <!--<button id="sidebarhelper" class="sidebarhelper toggle-btn btn btn-light" (click)="toggleSidebar()">></button>
+    
+    <button id="collapsezone" class="collapsezone" (click)="toggleSidebar()"></button>-->
 
-    <button id="collapsezone" class="collapsezone" (click)="toggleSidebar()"></button>
+    <button id="collapsezone" class="collapsezone"></button>
 
-    <div id="sidebar" class="sidebar">
+    <div id="sidebar" class="sidebar" (mouseenter)="toggleSidebar(true)" (mouseleave)="toggleSidebar(false)">
       <p>
         <br />
         <a routerLink="/login">Login</a>
@@ -26,31 +28,29 @@ import { PageInfoService } from "./page-info.service";
         <br />
         <a routerLink="/grid">Grid</a>
         <br />
-        <br />
         <a routerLink="/tags-manager">Tags</a>
-        <br />
         <br />
         <a routerLink="/tree">Tree</a>
       </p>
-      <p *ngIf="isLoggedIn$ | async">
+      <p *ngIf="this.auth.isLoggedIn$ | async">
         <a routerLink="/home">Home</a>
         <br />
         <br />
-        <a (click)="logout()">Logout</a>
+        <a routerLink="/home" (click)="logout()">Logout</a>
       </p>
     </div>
 
     <main class="content">
       <header class="brand-name" style="height: 8vh;">
-        <div class="d-flex bd-highlight">
-          <div class="p-2 w-100 bd-highlight">
+        <div class="d-flex flex-row-reverse bd-highlight">
+          <!--<div class="p-2 w-100 bd-highlight">
             <i class="bi bi-house-door-fill cns-gradient" style="font-size: 2rem;" aria-hidden="true" (click)="rdm()">
               <span class="cns-gradient cns-gradient-text-strech"> RELAYTD</span>
             </i>
-          </div>
+          </div>-->
 
-          <div class="p-2 flex-shrink-1 bd-highlight">
-            <i class="bi bi-info-circle" (click)="getPageInfo()" style="font-size: 2rem;"></i>
+          <div class="p-2 bd-highlight">
+            <i class="bi bi-info-circle" (click)="getPageInfo()" style="font-size: 1.5rem;"></i>
           </div>
         </div>
       </header>
@@ -70,7 +70,7 @@ export class AppComponent {
   pageDescription = "No page description found";
 
   constructor(
-    private auth: ApiService,
+    public auth: ApiService,
     private modalService: NgbModal,
     private toastr: ToastrService,
     private pageInfoService: PageInfoService,
@@ -88,13 +88,14 @@ export class AppComponent {
     localStorage.clear();
     this.auth.logout();
   }
-  toggleSidebar() {
+  toggleSidebar(forceStateCollape: boolean) {
     const sidebar = document.getElementById("sidebar");
-    sidebar!.classList.toggle("uncollapsed");
-    const sidebarhelper = document.getElementById("sidebarhelper");
-    sidebarhelper!.classList.toggle("uncollapsed");
+    //const sidebarhelper = document.getElementById("sidebarhelper");
     const collapsezone = document.getElementById("collapsezone");
-    collapsezone!.classList.toggle("uncollapsed");
+
+    sidebar!.classList.toggle("uncollapsed", forceStateCollape);
+    //sidebarhelper!.classList.toggle("uncollapsed", forceStateCollape);
+    collapsezone!.classList.toggle("uncollapsed", forceStateCollape);
   }
 
   getPageInfo() {

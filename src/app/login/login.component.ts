@@ -31,24 +31,21 @@ export class LoginComponent implements OnInit {
     private service: ApiService,
     private loginHandler: LoginHandlerService,
     private toastr: ToastrService,
-    private pageInfoService: PageInfoService
+    private pageInfoService: PageInfoService,
   ) {}
-
   ngOnInit() {
     this.pageInfoService.updateInformation(PAGE_DESCRIPTIONS.login);
 
-    this.randomOffsets = this.tex
-      .split("\n")
-      .map((line, j) => line.split("").map((char, i) => Math.random() * 0.75));
+    this.randomOffsets = this.tex.split("\n").map((line, j) => line.split("").map((char, i) => Math.random() * 0.75));
   }
 
   ngAfterViewInit() {}
 
   loginWithGithub() {
-    window.location.href = "http://localhost:8080/oauth2/authorization/github";
+    window.location.href = environment.APIBaseUrl + "oauth2/authorization/github";
   }
   loginWithGoogle() {
-    window.location.href = "http://localhost:8080/oauth2/authorization/google";
+    window.location.href = environment.APIBaseUrl + "oauth2/authorization/google";
   }
 
   doLogin(form: NgForm) {

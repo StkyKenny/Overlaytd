@@ -15,11 +15,10 @@ export class ApiService {
   isLogged = false;
   loginData = { username: "", password: "" };
 
-  private loggedInSubject = new BehaviorSubject<boolean>(false);
   private loggedWithOauth = new BehaviorSubject<boolean>(false);
 
   // Observable for other components to subscribe to
-  readonly isLoggedIn$: Observable<boolean> = this.loggedInSubject.asObservable();
+  readonly isLoggedIn$: Observable<boolean> = this.loggedWithOauth.asObservable();
 
   astres: Map<string, Astre> = new Map();
   childrenMap: Map<string, AstreID[]> = new Map(); // key as string because key works as reference when using object
@@ -32,7 +31,7 @@ export class ApiService {
 
   getCsrfToken() {
     return this.http
-      .get("http://localhost:8080/csrf/token", { withCredentials: true })
+      .get(environment.APIBaseUrl + "csrf/token", { withCredentials: true })
       .subscribe((data: any) => localStorage.setItem("csrf", data.token));
   }
   isOauth() {
@@ -40,20 +39,13 @@ export class ApiService {
   }
 
   public logged() {
-    this.loggedInSubject.next(true);
-    return true;
-  }
-
-  public logOauth() {
-    this.logged();
     this.loggedWithOauth.next(true);
-    console.log(this.loggedInSubject);
     return true;
   }
 
   public login(usernameInput: string, passwordInput: string) {
     return this.http.post(
-      "http://localhost:8080/auth/login2",
+      environment.APIBaseUrl + "auth/login2",
       {
         username: usernameInput,
         password: passwordInput,
@@ -67,12 +59,12 @@ export class ApiService {
         },
         responseType: "json",
       },
-    );
+    ); //.pipe( () => );
   }
 
   public refresh() {
     return this.http.post(
-      "http://localhost:8080/auth/refresh",
+      environment.APIBaseUrl + "auth/refresh",
       {},
       {
         withCredentials: true,
@@ -81,24 +73,25 @@ export class ApiService {
     );
   }
 
-  /*this.http.post<string>("http://localhost:8080/login", body, {
+  /*this.http.post<string>(environment.APIBaseUrl + "login", body, {
       headers,
       //withCredentials: true,// cross-site Access-Control requests should be made using credentials such as cookies, authentication headers or TLS client certificates
       responseType: "json",
     });*/
 
   public logout() {
-    this.loggedInSubject.next(false);
+    //this.loggedInSubject.next(false);
 
     console.log("in logout service");
     this.http
-      .post("http://localhost:8080/auth/logout", {}, { withCredentials: true })
+      .post(environment.APIBaseUrl + "auth/logout", {}, { withCredentials: true })
       .pipe(take(1))
       .subscribe({
         next: (result) => {
           this.router
             .navigate(["/login"])
             .then(() => this.toastr.success("Please Login to access the app", "Logout Successful"));
+          this.loggedWithOauth.next(false);
         },
         error: (err) => {
           console.log(err);
@@ -110,7 +103,7 @@ export class ApiService {
 
   getAstres(): Observable<Astre[]> {
     const headers = new HttpHeaders({});
-    let request = this.http.get<Astre[]>("http://localhost:8080/api/astres/getall", {});
+    let request = this.http.get<Astre[]>(environment.APIBaseUrl + "api/astres/getall", {});
     return request;
   }
 
@@ -120,7 +113,7 @@ export class ApiService {
 
   getAstresAndLinks(): Observable<Astre[]> {
     const headers = new HttpHeaders({});
-    let request = this.http.get<AstreLinksResponse>("http://localhost:8080/api/astres/astreslinks", {});
+    let request = this.http.get<AstreLinksResponse>(environment.APIBaseUrl + "api/astres/astreslinks", {});
     return request.pipe(
       map((response: AstreLinksResponse) => {
         response.astres.forEach((astre: Astre) => {
@@ -160,13 +153,13 @@ export class ApiService {
 
     headers.set("access-control-allow-origin", "http://localhost:4200/");
 
-    return this.http.post<Astre[]>("http://localhost:8080/api/astres/astres", astres);
+    return this.http.post<Astre[]>(environment.APIBaseUrl + "api/astres/astres", astres);
   }
   deleteAstre(type: string, subtype: string, name: string): Observable<Astre[]> {
     const headers = new HttpHeaders({});
     const astreID: AstreID = { type, subtype, name };
     headers.set("access-control-allow-origin", "http://localhost:4200/");
-    return this.http.delete<Astre[]>("http://localhost:8080/api/astres/astre", {
+    return this.http.delete<Astre[]>(environment.APIBaseUrl + "api/astres/astre", {
       headers,
       body: astreID,
     });
@@ -175,7 +168,7 @@ export class ApiService {
   getUserDetails() {
     const headers = new HttpHeaders({});
 
-    return this.http.get<Astre[]>("http://localhost:8080/userDetails", {
+    return this.http.get<Astre[]>(environment.APIBaseUrl + "auth/userDetails", {
       headers,
     });
   }

@@ -7,7 +7,7 @@
 
 header {
   display: block;
-  height: 10px;
+  max-height: 3em;
   padding: var(--content-padding);
   box-shadow: 0px 5px 25px var(--shadow-color);
 }
