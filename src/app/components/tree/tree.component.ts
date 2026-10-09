@@ -17,6 +17,8 @@ import { StringInputDialogComponent } from "src/app/shared/string-input-dialog.c
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { take } from "rxjs";
 import { SharedModule } from "src/app/shared.module";
+import { isValidData } from "./tree-data-validator";
+import { TreeTooltip } from "./tree-tooltip";
 
 @Component({
   selector: "app-tree",
@@ -67,15 +69,7 @@ export class TreeComponent implements AfterViewInit {
   // Tooltip variables
   svgBounds: any;
   tooltipPinned: boolean = false;
-  tooltip: d3.Selection<HTMLDivElement, unknown, HTMLElement, any>;
-  tooltipAnchor: d3.HierarchyPointNode<Astre>;
-  tooltipWrapper: d3.Selection<HTMLDivElement, unknown, HTMLElement, any>;
-
-  // TODO Put those in an array
-  tooltipCloseButton: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
-  tooltipTagSpreadButton: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
-  tooltipTagRemovalSpreadButton: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
-  tooltipPropagateTag: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
+  treeToolTip = new TreeTooltip();
 
   // Slider
   sliderValue: number = 0;
@@ -126,20 +120,6 @@ export class TreeComponent implements AfterViewInit {
     this.pageInfoService.updateInformation(PAGE_DESCRIPTIONS.tree);
   }
 
-  initDOM() {
-    let treeTemplater = new TreeTemplates();
-    this.tooltipWrapper = treeTemplater.tooltipWrapper;
-    this.tooltip = treeTemplater.tooltip;
-    this.tooltipCloseButton = treeTemplater.tooltipCloseButton.on("click", () => this.clearTooltip());
-    this.tooltipTagSpreadButton = treeTemplater.tooltipSpreadTagButton.on("click", (event) =>
-      this.spreadTagToDescendants(event),
-    );
-
-    this.tooltipTagRemovalSpreadButton = treeTemplater.tooltipSpreadTagRemovalButton.on("click", (event) =>
-      this.blankButton(event),
-    );
-    //this.tooltipCloseButton = treeTemplater.tooltipPropagateButton.on("click", () => this.clearTooltip());
-  }
   ngAfterViewInit(): void {
     const svgElement = this.svgRef.nativeElement as SVGSVGElement;
     this.svg = d3.select(this.svgRef.nativeElement);
@@ -152,14 +132,14 @@ export class TreeComponent implements AfterViewInit {
       .subscribe({
         next: (astres) => {
           this.astres = astres.filter((a) => a.astreID.type == "topic");
-          this.initDOM();
+          this.treeToolTip.initDOM();
           this.loadTree();
         },
         error: (err) => {
           this.astreService.getLocalAstres().subscribe({
             next: (text: Astre[]) => {
               this.astres = text;
-              this.initDOM();
+              this.treeToolTip.initDOM();
               this.loadTree();
             },
             error: (err) => console.error("Failed to load file:", err),
@@ -214,75 +194,10 @@ export class TreeComponent implements AfterViewInit {
 
   ngOnChanges(changes: SimpleChanges) {}
 
-  /**
-   * Hide the tooltip
-   * Also set pin flag to false
-   */
-  clearTooltip() {
-    this.tooltipPinned = false;
-    this.tooltipWrapper.style("display", "none");
-    this.tooltipCloseButton.style("display", "none");
-    this.tooltipTagSpreadButton.style("display", "none");
-    this.tooltipTagRemovalSpreadButton.style("display", "none");
-    this.tooltipWrapper.transition().duration(200).style("opacity", 0);
-  }
-
-  /**
-   *
-   *
-   * @param event
-   */
-  spreadTagToDescendants(event: PointerEvent) {
-    const modalRef = this.modalService.open(StringInputDialogComponent, {
-      centered: true,
-    });
-
-    let rootAstreID = this.tooltipAnchor.data.astreID;
-    modalRef.componentInstance.message =
-      "What tag do you want to propagate to the descendants of : \n'" + JSON.stringify(rootAstreID, null, 2) + "'";
-
-    modalRef.result
-      .then((tagToAdd) => {
-        if (tagToAdd == "") {
-          this.toastr.info("", "Propagation Cancelled");
-        } else {
-          let astres = this.astreService.loadAstres();
-          let propagationQueue: AstreID[] = [];
-          propagationQueue.push(rootAstreID);
-          let childrenMap = this.astreService.getChildren();
-
-          let astresToUpdate: Astre[] = [];
-
-          while (propagationQueue.length > 0) {
-            let currentAstreID: AstreID | undefined = propagationQueue.pop();
-            if (currentAstreID == undefined) {
-              continue;
-            }
-            childrenMap.get(astreIDKey(currentAstreID))?.forEach((astreID) => {
-              propagationQueue.push(astreID);
-
-              let astreToUpdate = astres.get(astreIDKey(astreID!));
-              if (astreToUpdate) {
-                updateTags(astreToUpdate, [tagToAdd], []);
-                astresToUpdate.push(astreToUpdate);
-              }
-            });
-            currentAstreID = propagationQueue.pop();
-          }
-          this.astreService
-            .postAstres(astresToUpdate)
-            .pipe(take(1))
-            .subscribe({
-              next: (res) => console.log(res), //this.toastr.success("Correctly added the tag to all its descendants (" + res.length + ")"),
-              error: (err) => this.toastr.error("error", err),
-            });
-        }
-      })
-      .catch(() => {
-        console.log("Modal dismissed");
-        this.toastr.info("", "Propagation Cancelled");
-      });
-    this.clearTooltip();
+  initDOM() {
+    this.treeToolTip.initDOM();
+    this.treeToolTip.addLogicToTagSpreadButton((event) => this.spreadTagToDescendants(event));
+    this.treeToolTip.addLogicToTagRemovalSpreadButton((event) => this.blankButton(event));
   }
 
   onSearchChange() {
@@ -338,177 +253,6 @@ export class TreeComponent implements AfterViewInit {
 
     this.updateViewTransform(this.currentTransform);
   }
-  //  TODO add feature for this button
-  blankButton(event: PointerEvent) {
-    //
-    const modalRef = this.modalService.open(StringInputDialogComponent, {
-      centered: true,
-    });
-
-    modalRef.componentInstance.message = "This currently has no defined feature";
-
-    modalRef.result
-      .then((tagToAdd) => {})
-      .catch(() => {
-        console.log("Modal dismissed");
-        this.toastr.info("", "Propagation Cancelled");
-      });
-    this.clearTooltip();
-  }
-  /**
-   * Render a tooltip given the data provided by pointNode
-   *
-   * @param tooltip The tooltip that will be rendered
-   * @param pointNode The node with the data to display
-   * @param event The event produced
-   * @param anchor The node used as a reference for coordinates
-   *
-   */
-  renderTooltip(
-    tooltip: d3.Selection<HTMLDivElement, unknown, HTMLElement, undefined>,
-    pointNode: d3.HierarchyPointNode<Astre>,
-    event: MouseEvent,
-    anchor: d3.HierarchyPointNode<Astre>,
-    target: SVGElement,
-  ) {
-    tooltip.style("display", "block");
-    tooltip.style("pointer-events", "block");
-    let astre: Astre = pointNode.data as Astre;
-    let astreTags = astre.tags;
-    let additionalComments = "";
-
-    let targetDOM: DOMRect = d3.select(target).node()!.getBoundingClientRect();
-    let px = targetDOM.x;
-    let py = targetDOM.y;
-
-    const [x, y] = d3.pointRadial(anchor.x, anchor.y); // Relative coordinate to RootNode
-
-    const node = tooltip.node() as HTMLElement; // cast
-    let isLeft = false; //x < 0;
-    let isUp = y < 0;
-
-    if (astre.tags == null || astre.tags.length == 0) {
-      astreTags = "<span style='color:LightGrey;'>No Tags Found</span>";
-    } else {
-      // === Custom Tooltip comments based on tags ===
-      let tagsList = astreTags.split(",");
-      for (let tagName of tagsList) {
-        switch (tagName.toLowerCase()) {
-          case Tags.HighlightedList.toLowerCase(): {
-            additionalComments +=
-              "</br><span style='font-style:italic;'>This Node only has the most impactful entries (non-exhaustive)</span>";
-            break;
-          }
-          case Tags.ExternalList.toLowerCase(): {
-            additionalComments +=
-              "</br><span style='font-style:italic;'>This Node possess an external list that isn't hosted on this site (Please refer to the description)</span>";
-            break;
-          }
-          default: {
-            break;
-          }
-        }
-      }
-    }
-
-    if (astre.link == null || astre.link == "" || astre.link == " ") {
-    } else {
-      console.log(astre.astreID.name);
-      console.log(astre.link);
-      console.log(typeof astre.link);
-      additionalComments +=
-        '<iframe height="240" width="480" [src]="\"' +
-        astre.link +
-        '\"" loading="lazy"                  frameborder="1"                  allowfullscreen                  allow="autoplay"                ></iframe>';
-    }
-
-    // ==================
-    const tooltipNode = tooltip
-      .style("white-space", "pre-line")
-      .style("line-height", "0.75")
-      .style("overflow-wrap", "break-word")
-      .html(
-        `<b>${astre.astreID.name}</b></br>
-            <span style='font-size:${tooltipConfig.comment.font.size}px'>[${astreTags}] in ${astre.parent} </span> </br>
-            ${astre.description} </br>
-            <span style='font-size:${tooltipConfig.comment.font.size}px'>${additionalComments} </span>`,
-      )
-      .node();
-    if (!node) return; // nothing to do if tooltip not rendered
-    const tooltipBox = tooltipNode!.getBoundingClientRect();
-    let widthOffset = tooltipBox.width + 10;
-    let buttonToTooltipVerticalOffset = 35;
-    let tooltipHorizontalOffset = 10;
-    tooltip
-      .style("left", isLeft ? px - widthOffset + `px` : px + targetDOM.width + tooltipHorizontalOffset + `px`)
-      .style("top", isUp ? py + "px" : py + targetDOM.height - buttonToTooltipVerticalOffset + "px")
-      .style("text-align", isLeft ? "end" : "start");
-    if (event instanceof PointerEvent) {
-      // Clicked instance
-      // !! Creating additional DOM on each 'hover' event causes performance issue, so the close button DOM element only appear on clicked
-      let buttonsOffset = 0;
-      this.tooltipWrapper.style("pointer-events", "auto");
-      let tooltipCloseButtonNode = this.tooltipCloseButton.node();
-      if (!tooltipCloseButtonNode) return; // nothing to do if tooltip not rendered
-      this.tooltipCloseButton
-        .style("opacity", 1)
-        .style(
-          "left",
-          isLeft
-            ? px - tooltipCloseButtonNode.getBoundingClientRect().width - tooltipHorizontalOffset + `px`
-            : px + targetDOM.width + tooltipHorizontalOffset + `px`,
-        )
-        .style(
-          "top",
-          isUp
-            ? py - buttonToTooltipVerticalOffset + "px"
-            : py - 35 + targetDOM.height - buttonToTooltipVerticalOffset + "px",
-        );
-      buttonsOffset += tooltipCloseButtonNode.getBoundingClientRect().width + 10;
-      this.tooltipWrapper.style("pointer-events", "auto");
-      let tooltipTagSpreadButtonNode = this.tooltipCloseButton.node();
-      if (!tooltipTagSpreadButtonNode) return; // nothing to do if tooltip not rendered
-      this.tooltipTagSpreadButton
-        .style("opacity", 1)
-        .style(
-          "left",
-          isLeft
-            ? px -
-                tooltipTagSpreadButtonNode.getBoundingClientRect().width -
-                tooltipHorizontalOffset +
-                buttonsOffset +
-                `px`
-            : px + targetDOM.width + tooltipHorizontalOffset + buttonsOffset + `px`,
-        )
-        .style(
-          "top",
-          isUp
-            ? py - buttonToTooltipVerticalOffset + "px"
-            : py - 35 + targetDOM.height - buttonToTooltipVerticalOffset + "px",
-        );
-
-      buttonsOffset += tooltipCloseButtonNode.getBoundingClientRect().width + 10; // TODO MAKE IT A LOOP
-      this.tooltipTagRemovalSpreadButton
-        .style("opacity", 1)
-        .style(
-          "left",
-          isLeft
-            ? px -
-                tooltipTagSpreadButtonNode.getBoundingClientRect().width -
-                tooltipHorizontalOffset +
-                buttonsOffset +
-                `px`
-            : px + targetDOM.width + tooltipHorizontalOffset + buttonsOffset + `px`,
-        )
-        .style(
-          "top",
-          isUp
-            ? py - buttonToTooltipVerticalOffset + "px"
-            : py - 35 + targetDOM.height - buttonToTooltipVerticalOffset + "px",
-        );
-    }
-  }
-
   /**
    * Pre-process the data before initializing the tree
    */
@@ -529,55 +273,80 @@ export class TreeComponent implements AfterViewInit {
   }
 
   /**
-   * Check if the data is valid for making a tree hierarchy
-   * It checks for multiple roots and cycle in graph
    *
-   * @returns True if the Data is valid, false otherwise
+   *
+   * @param event
    */
-  isValidData(): boolean {
-    let roots = this.astres.filter((a) => a.parent == null || a.parent == "");
-    if (roots.length > 1) {
-      this.toastr.info(
-        Array.from(roots)
-          .map((a) => a.astreID.name)
-          .join(" | "),
-        "Invalid (Multiple roots found)",
-        { disableTimeOut: true },
-      );
-      return false;
-    }
-
-    let visited: Set<Astre> = new Set(); // For cehcking cycle
-    this.astres.forEach((a) => {
-      let currentNode = a;
-      let currentParent = a.parent;
-      let visitedLocal: Set<Astre> = new Set(); // For cehcking cycle
-      while (currentNode != null && currentParent != null && currentParent != "") {
-        if (visited.has(currentNode)) {
-          // No need to re-travel checked nodes
-          break;
-        }
-        if (visitedLocal.has(currentNode)) {
-          // Cycle found
-          this.toastr.info(
-            Array.from(visitedLocal.keys())
-              .map((a) => a.astreID.name)
-              .join(" | "),
-            "Invalid (Cycle found)",
-            { disableTimeOut: true },
-          );
-          return false;
-        }
-        visitedLocal.add(currentNode);
-
-        currentParent = currentNode.parent;
-        currentNode = this.astres.filter((a) => a.astreID.name == currentParent)[0];
-      }
-      visited = new Set<Astre>([...visited, ...visitedLocal]);
+  spreadTagToDescendants(event: PointerEvent) {
+    const modalRef = this.modalService.open(StringInputDialogComponent, {
+      centered: true,
     });
-    return true;
+
+    let rootAstreID = this.treeToolTip.tooltipAnchor.data.astreID;
+    modalRef.componentInstance.message =
+      "What tag do you want to propagate to the descendants of : \n'" + JSON.stringify(rootAstreID, null, 2) + "'";
+
+    modalRef.result
+      .then((tagToAdd) => {
+        if (tagToAdd == "") {
+          this.toastr.info("", "Propagation Cancelled");
+        } else {
+          let astres = this.astreService.loadAstres();
+          let propagationQueue: AstreID[] = [];
+          propagationQueue.push(rootAstreID);
+          let childrenMap = this.astreService.getChildren();
+
+          let astresToUpdate: Astre[] = [];
+
+          while (propagationQueue.length > 0) {
+            let currentAstreID: AstreID | undefined = propagationQueue.pop();
+            if (currentAstreID == undefined) {
+              continue;
+            }
+            childrenMap.get(astreIDKey(currentAstreID))?.forEach((astreID) => {
+              propagationQueue.push(astreID);
+
+              let astreToUpdate = astres.get(astreIDKey(astreID!));
+              if (astreToUpdate) {
+                updateTags(astreToUpdate, [tagToAdd], []);
+                astresToUpdate.push(astreToUpdate);
+              }
+            });
+            currentAstreID = propagationQueue.pop();
+          }
+          this.astreService
+            .postAstres(astresToUpdate)
+            .pipe(take(1))
+            .subscribe({
+              next: (res) => console.log(res), //this.toastr.success("Correctly added the tag to all its descendants (" + res.length + ")"),
+              error: (err) => this.toastr.error("error", err),
+            });
+        }
+      })
+      .catch(() => {
+        console.log("Modal dismissed");
+        this.toastr.info("", "Propagation Cancelled");
+      });
+    this.tooltipPinned = this.treeToolTip.clearTooltip();
   }
 
+  //  TODO add feature for this button
+  blankButton(event: PointerEvent) {
+    //
+    const modalRef = this.modalService.open(StringInputDialogComponent, {
+      centered: true,
+    });
+
+    modalRef.componentInstance.message = "This currently has no defined feature";
+
+    modalRef.result
+      .then((tagToAdd) => {})
+      .catch(() => {
+        console.log("Modal dismissed");
+        this.toastr.info("", "Propagation Cancelled");
+      });
+    this.treeToolTip.clearTooltip();
+  }
   /**
    * Init a radial tree given the data
    *
@@ -597,7 +366,7 @@ export class TreeComponent implements AfterViewInit {
     this.childColumn = "astreid.name";
     this.parentColumn = "parent";
 
-    if (!this.isValidData()) {
+    if (!isValidData(this.astres, this.toastr)) {
       return;
     }
 
@@ -692,15 +461,13 @@ export class TreeComponent implements AfterViewInit {
       .on("click", (event: MouseEvent, pointNode: d3.HierarchyPointNode<Astre>) => {
         let target = event.currentTarget as SVGElement;
 
-        this.tooltipCloseButton.style("display", "block");
-        this.tooltipTagSpreadButton.style("display", "block");
-        this.tooltipTagRemovalSpreadButton.style("display", "block");
+        this.treeToolTip.showButtons();
         const anchor = this.nodeG
           .select("circle")
           .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
           .data()[0];
-        this.renderTooltip(this.tooltip, pointNode, event, anchor, target);
-        this.tooltip.transition().duration(200).style("opacity", 0.9);
+        this.treeToolTip.renderTooltip(pointNode, event, target);
+        this.treeToolTip.tooltip.transition().duration(200).style("opacity", 0.9);
         this.tooltipPinned = true;
 
         let currentNode = pointNode;
@@ -739,21 +506,20 @@ export class TreeComponent implements AfterViewInit {
           .attr("opacity", treeConfig.label.hoverOpacity)
           .attr("font-weight", treeConfig.label.hoverWeight);
 
-        this.tooltipWrapper.style("display", "block");
-        this.tooltipWrapper.transition().duration(200).style("opacity", 0.9);
+        this.treeToolTip.showToolTip();
         if (!this.tooltipPinned) {
-          this.tooltipAnchor = this.nodeG
+          this.treeToolTip.tooltipAnchor = this.nodeG
             .select("circle")
             .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
             .data()[0];
           // Show tooltip
-          this.renderTooltip(this.tooltip, pointNode, event, this.tooltipAnchor, target);
+          this.treeToolTip.renderTooltip(pointNode, event, target);
         }
       })
 
       .on("mouseout", (event: any, pointNode: d3.HierarchyPointNode<Astre>) => {
         if (!this.tooltipPinned) {
-          this.clearTooltip();
+          this.tooltipPinned = this.treeToolTip.clearTooltip();
         }
         let target: Element = event.currentTarget;
 
