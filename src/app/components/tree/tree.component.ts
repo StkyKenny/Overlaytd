@@ -19,6 +19,7 @@ import { take } from "rxjs";
 import { SharedModule } from "src/app/shared.module";
 import { isValidData } from "./tree-data-validator";
 import { TreeTooltip } from "./tree-tooltip";
+import { TreeService } from "./tree.service";
 
 @Component({
   selector: "app-tree",
@@ -68,7 +69,7 @@ export class TreeComponent implements AfterViewInit {
 
   // Tooltip variables
   svgBounds: any;
-  tooltipPinned: boolean = false;
+  treeService = inject(TreeService);
   treeToolTip = new TreeTooltip();
 
   // Slider
@@ -132,14 +133,14 @@ export class TreeComponent implements AfterViewInit {
       .subscribe({
         next: (astres) => {
           this.astres = astres.filter((a) => a.astreID.type == "topic");
-          this.treeToolTip.initDOM();
+          this.initDOM();
           this.loadTree();
         },
         error: (err) => {
           this.astreService.getLocalAstres().subscribe({
             next: (text: Astre[]) => {
               this.astres = text;
-              this.treeToolTip.initDOM();
+              this.initDOM();
               this.loadTree();
             },
             error: (err) => console.error("Failed to load file:", err),
@@ -277,7 +278,7 @@ export class TreeComponent implements AfterViewInit {
    *
    * @param event
    */
-  spreadTagToDescendants(event: PointerEvent) {
+  spreadTagToDescendants(event: MouseEvent) {
     const modalRef = this.modalService.open(StringInputDialogComponent, {
       centered: true,
     });
@@ -327,11 +328,11 @@ export class TreeComponent implements AfterViewInit {
         console.log("Modal dismissed");
         this.toastr.info("", "Propagation Cancelled");
       });
-    this.tooltipPinned = this.treeToolTip.clearTooltip();
+    this.treeToolTip.clearTooltip();
   }
 
   //  TODO add feature for this button
-  blankButton(event: PointerEvent) {
+  blankButton(event: MouseEvent) {
     //
     const modalRef = this.modalService.open(StringInputDialogComponent, {
       centered: true,
@@ -424,6 +425,14 @@ export class TreeComponent implements AfterViewInit {
         return computeBranchColor(link); //d3.hsl(0, 1, 0.9, 1).darker(d.target.depth).clamp().formatHsl();
       })
       .attr("stroke-width", linkConfig.stroke.width);
+    var parentLinkMap = new Map<
+      d3.HierarchyPointNode<Astre>,
+      d3.Selection<SVGPathElement, d3.HierarchyPointLink<Astre>, null, undefined>
+    >();
+    links.each(function (link: d3.HierarchyPointLink<Astre>) {
+      parentLinkMap.set(link.target, d3.select<SVGPathElement, d3.HierarchyPointLink<Astre>>(this as SVGPathElement));
+    });
+
     // Draw nodes
     this.nodeG = this.g
       .append("g")
@@ -462,20 +471,13 @@ export class TreeComponent implements AfterViewInit {
         let target = event.currentTarget as SVGElement;
 
         this.treeToolTip.showButtons();
-        const anchor = this.nodeG
-          .select("circle")
-          .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
-          .data()[0];
         this.treeToolTip.renderTooltip(pointNode, event, target);
         this.treeToolTip.tooltip.transition().duration(200).style("opacity", 0.9);
-        this.tooltipPinned = true;
+        this.treeService.setTooltipPin(true);
 
         let currentNode = pointNode;
         while (currentNode.parent != null) {
-          links
-            .filter((s) => s.target == currentNode) // Bad for optimisation to not filter, but helps against race-condition/double-trigger
-            .transition()
-            .attr("stroke-width", linkConfig.stroke.width);
+          parentLinkMap.get(currentNode)!.transition().attr("stroke-width", linkConfig.stroke.width);
           currentNode = currentNode.parent;
         }
       })
@@ -487,8 +489,8 @@ export class TreeComponent implements AfterViewInit {
         linkConfig.stroke.rainbowLoop = true;
         let currentNode = pointNode;
         while (currentNode.parent != null) {
-          links
-            .filter((s: d3.HierarchyPointLink<Astre>) => s.target == currentNode)
+          parentLinkMap
+            .get(currentNode)!
             .transition()
             .attr("stroke-width", linkConfig.stroke.widthHover)
             .transition()
@@ -507,7 +509,7 @@ export class TreeComponent implements AfterViewInit {
           .attr("font-weight", treeConfig.label.hoverWeight);
 
         this.treeToolTip.showToolTip();
-        if (!this.tooltipPinned) {
+        if (!this.treeService.getTooltipPin()) {
           this.treeToolTip.tooltipAnchor = this.nodeG
             .select("circle")
             .filter((node: d3.HierarchyPointNode<Astre>) => node.data.astreID == pointNode.data.astreID)
@@ -518,8 +520,8 @@ export class TreeComponent implements AfterViewInit {
       })
 
       .on("mouseout", (event: any, pointNode: d3.HierarchyPointNode<Astre>) => {
-        if (!this.tooltipPinned) {
-          this.tooltipPinned = this.treeToolTip.clearTooltip();
+        if (!this.treeService.getTooltipPin()) {
+          this.treeToolTip.clearTooltip();
         }
         let target: Element = event.currentTarget;
 
@@ -527,8 +529,8 @@ export class TreeComponent implements AfterViewInit {
         linkConfig.stroke.rainbowLoop = false;
         let currentNode = pointNode;
         while (currentNode.parent != null) {
-          links
-            .filter((s) => s.target == currentNode) // Bad for optimisation to not filter, but helps against race-condition/double-trigger
+          parentLinkMap
+            .get(currentNode)!
             .transition()
             .attr("stroke-width", linkConfig.stroke.width)
             .attr("stroke", (link: d3.HierarchyPointLink<Astre>) => {

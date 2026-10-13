@@ -3,6 +3,8 @@ import { Astre } from "src/app/models/Astre";
 import { Tags } from "src/app/models/Tags";
 import { tooltipConfig } from "./tree.config";
 import TreeTemplates from "./tree-buttons";
+import { TreeService } from "./tree.service";
+import { inject } from "@angular/core";
 
 export class TreeTooltip {
   tooltip: d3.Selection<HTMLDivElement, unknown, HTMLElement, any>;
@@ -14,6 +16,8 @@ export class TreeTooltip {
   private tooltipTagRemovalSpreadButton: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
   private tooltipPropagateTag: d3.Selection<HTMLButtonElement, unknown, HTMLElement, any>;
 
+  private treeService = inject(TreeService);
+
   constructor() {
     this.initDOM();
   }
@@ -22,13 +26,13 @@ export class TreeTooltip {
    * Hide the tooltip
    * Also set pin flag to false
    */
-  clearTooltip(): boolean {
+  clearTooltip() {
     this.tooltipWrapper.style("display", "none");
     this.tooltipCloseButton.style("display", "none");
     this.tooltipTagSpreadButton.style("display", "none");
     this.tooltipTagRemovalSpreadButton.style("display", "none");
     this.tooltipWrapper.transition().duration(200).style("opacity", 0);
-    return false;
+    this.treeService.setTooltipPin(false);
   }
 
   showButtons() {
@@ -41,11 +45,11 @@ export class TreeTooltip {
     this.tooltipWrapper.style("display", "block");
     this.tooltipWrapper.transition().duration(200).style("opacity", 0.9);
   }
-  addLogicToTagSpreadButton(logic: (event: MouseEvent) => void) {
+  addLogicToTagSpreadButton(logic: (event: PointerEvent) => void) {
     let treeTemplater = new TreeTemplates();
     this.tooltipTagSpreadButton = treeTemplater.tooltipSpreadTagButton.on("click", logic);
   }
-  addLogicToTagRemovalSpreadButton(logic: (event: MouseEvent) => void) {
+  addLogicToTagRemovalSpreadButton(logic: (event: PointerEvent) => void) {
     let treeTemplater = new TreeTemplates();
     this.tooltipTagRemovalSpreadButton = treeTemplater.tooltipSpreadTagRemovalButton.on("click", logic);
   }
